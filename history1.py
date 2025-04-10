@@ -37,14 +37,12 @@ if "authenticated" not in st.session_state:
     st.session_state.chat_history = []  # Initialize chat history
 if "debug_mode" not in st.session_state:
     st.session_state.debug_mode = False
-# Initialize chart selection persistence
 if "chart_x_axis" not in st.session_state:
     st.session_state.chart_x_axis = None
 if "chart_y_axis" not in st.session_state:
     st.session_state.chart_y_axis = None
 if "chart_type" not in st.session_state:
     st.session_state.chart_type = "Bar Chart"
-# Initialize query and results persistence
 if "current_query" not in st.session_state:
     st.session_state.current_query = None
 if "current_results" not in st.session_state:
@@ -120,7 +118,6 @@ else:
     def run_snowflake_query(query):
         try:
             if not query:
-                st.warning("⚠️ No SQL query generated.")
                 return None
             df = session.sql(query)
             data = df.collect()
@@ -130,7 +127,6 @@ else:
             result_df = pd.DataFrame(data, columns=columns)
             return result_df
         except Exception as e:
-            st.error(f"❌ SQL Execution Error: {str(e)}")
             return None
 
     def is_structured_query(query: str):
@@ -155,28 +151,25 @@ else:
         ]
         return any(re.search(pattern, query.lower()) for pattern in suggestion_patterns)
 
-    def complete(prompt, model="mistral-large"):
+    def COMPLETE(prompt, model="mistral-large"):
         try:
             prompt = prompt.replace("'", "\\'")
             query = f"SELECT SNOWFLAKE.CORTEX.COMPLETE('{model}', '{prompt}') AS response"
             result = session.sql(query).collect()
             return result[0]["RESPONSE"]
         except Exception as e:
-            st.error(f"❌ COMPLETE Function Error: {str(e)}")
             return None
 
-    def summarize(text):
+    def SUMMARIZE(text):
         try:
             text = text.replace("'", "\\'")
             query = f"SELECT SNOWFLAKE.CORTEX.SUMMARIZE('{text}') AS summary"
             result = session.sql(query).collect()
             return result[0]["SUMMARY"]
         except Exception as e:
-            st.error(f"❌ SUMMARIZE Function Error: {str(e)}")
             return None
 
     def parse_sse_response(response_text: str) -> List[Dict]:
-        """Parse SSE response into a list of JSON objects."""
         events = []
         lines = response_text.strip().split("\n")
         current_event = {}
@@ -185,14 +178,14 @@ else:
                 current_event["event"] = line.split(":", 1)[1].strip()
             elif line.startswith("data:"):
                 data_str = line.split(":", 1)[1].strip()
-                if data_str != "[DONE]":  # Skip the [DONE] marker
+                if data_str != "[DONE]":
                     try:
                         data_json = json.loads(data_str)
                         current_event["data"] = data_json
                         events.append(current_event)
-                        current_event = {}  # Reset for next event
-                    except json.JSONDecodeError as e:
-                        st.error(f"❌ Failed to parse SSE data: {str(e)} - Data: {data_str}")
+                        current_event = {}
+                    except json.JSONDecodeError:
+                        pass
         return events
 
     def snowflake_api_call(query: str, is_structured: bool = False):
@@ -218,18 +211,11 @@ else:
                 },
                 timeout=API_TIMEOUT // 1000
             )
-            if st.session_state.debug_mode:  # Show debug info only if toggle is enabled
-                st.write(f"API Response Status: {resp.status_code}")
-                st.write(f"API Raw Response: {resp.text}")
-            if resp.status_code < 400:
-                if not resp.text.strip():
-                    st.error("❌ API returned an empty response.")
-                    return None
+            if resp.status_code < 400 and resp.text.strip():
                 return parse_sse_response(resp.text)
             else:
-                raise Exception(f"Failed request with status {resp.status_code}: {resp.text}")
-        except Exception as e:
-            st.error(f"❌ API Request Failed: {str(e)}")
+                return None
+        except Exception:
             return None
 
     def summarize_unstructured_answer(answer):
@@ -241,45 +227,35 @@ else:
         search_results = []
         if not response:
             return sql, search_results
-        try:
-            for event in response:
-                if event.get("event") == "message.delta" and "data" in event:
-                    delta = event["data"].get("delta", {})
-                    content = delta.get("content", [])
-                    for item in content:
-                        if item.get("type") == "tool_results":
-                            tool_results = item.get("tool_results", {})
-                            if "content" in tool_results:
-                                for result in tool_results["content"]:
-                                    if result.get("type") == "json":
-                                        result_data = result.get("json", {})
-                                        if is_structured and "sql" in result_data:
-                                            sql = result_data.get("sql", "")
-                                        elif not is_structured and "searchResults" in result_data:
-                                            search_results = [sr["text"] for sr in result_data["searchResults"]]
-        except Exception as e:
-            st.error(f"❌ Error Processing Response: {str(e)}")
+        for event in response:
+            if event.get("event") == "message.delta" and "data" in event:
+                delta = event["data"].get("delta", {})
+                content = delta.get("content", [])
+                for item in content:
+                    if item.get("type") == "tool_results":
+                        tool_results = item.get("tool_results", {})
+                        if "content" in tool_results:
+                            for result in tool_results["content"]:
+                                if result.get("type") == "json":
+                                    result_data = result.get("json", {})
+                                    if is_structured and "sql" in result_data:
+                                        sql = result_data.get("sql", "")
+                                    elif not is_structured and "searchResults" in result_data:
+                                        search_results = [sr["text"] for sr in result_data["searchResults"]]
         return sql.strip(), search_results
 
     def generate_result_summary(results):
-        """Generate a meaningful summary of the query results tailored to specific queries like min/max or highest kWh savings."""
         try:
-            # Convert DataFrame to a readable string format for summarization
             results_text = results.to_string(index=False)
-            initial_summary = summarize(results_text)
+            initial_summary = SUMMARIZE(results_text)
             if not initial_summary:
                 return "⚠️ Unable to generate an initial summary."
 
-            # Check if the query is about kWh savings (highest, min, or max), only if current_query exists
-            if (st.session_state.current_query is not None and 
-                "kwh savings" in st.session_state.current_query.lower()):
-                # Check for correct column names (case-insensitive)
+            if (st.session_state.current_query and "kwh savings" in st.session_state.current_query.lower()):
                 if 'county' in results.columns.str.lower() and 'kwh_savings' in results.columns.str.lower():
-                    # Map to actual column names
                     county_col = [col for col in results.columns if col.lower() == 'county'][0]
                     kwh_savings_col = [col for col in results.columns if col.lower() == 'kwh_savings'][0]
 
-                    # Handle min and max query
                     if "min" in st.session_state.current_query.lower() and "max" in st.session_state.current_query.lower():
                         max_row = results.loc[results[kwh_savings_col].idxmax()]
                         min_row = results.loc[results[kwh_savings_col].idxmin()]
@@ -289,34 +265,20 @@ else:
                         min_value = min_row[kwh_savings_col]
                         return (f"The county with the highest kWh savings is {max_county} with approximately {max_value:,.0f} kWh, "
                                 f"and the county with the lowest kWh savings is {min_county} with approximately {min_value:,.0f} kWh.")
-                    # Handle highest only
                     elif "highest" in st.session_state.current_query.lower():
                         max_row = results.loc[results[kwh_savings_col].idxmax()]
                         county = max_row[county_col]
                         kwh_value = max_row[kwh_savings_col]
                         return f"The highest kilowatt-hours (kWh) savings county is {county} and the value is approximately {kwh_value:,.0f}."
-                else:
-                    # Fallback to summarize and complete for natural language conversion
-                    prompt = f"Convert the following query results into a natural language summary:\n\n{initial_summary}"
-                    natural_language_summary = complete(prompt)
-                    if natural_language_summary:
-                        return natural_language_summary
-                    else:
-                        return "⚠️ Unable to generate a natural language summary from results."
 
-            # Fallback to generic summary for other queries
             prompt = f"Provide a concise, meaningful summary of the following query results:\n\n{initial_summary}"
-            meaningful_summary = complete(prompt)
-            if meaningful_summary:
-                return meaningful_summary
-            else:
-                return "⚠️ Unable to generate a meaningful summary."
+            meaningful_summary = COMPLETE(prompt)
+            return meaningful_summary if meaningful_summary else "⚠️ Unable to generate a meaningful summary."
         except Exception as e:
             return f"⚠️ Summary generation failed: {str(e)}"
 
     # Visualization Function
     def display_chart_tab(df: pd.DataFrame, prefix: str = "chart"):
-        """Allows user to select chart options and displays a chart with unique widget keys."""
         if len(df.columns) < 2:
             st.write("Not enough columns to chart.")
             return
@@ -325,26 +287,17 @@ else:
         col1, col2, col3 = st.columns(3)
 
         default_x = st.session_state.get(f"{prefix}_x", all_cols[0])
-        try:
-            x_index = all_cols.index(default_x)
-        except ValueError:
-            x_index = 0
+        x_index = all_cols.index(default_x) if default_x in all_cols else 0
         x_col = col1.selectbox("X axis", all_cols, index=x_index, key=f"{prefix}_x")
 
         remaining_cols = [c for c in all_cols if c != x_col]
         default_y = st.session_state.get(f"{prefix}_y", remaining_cols[0])
-        try:
-            y_index = remaining_cols.index(default_y)
-        except ValueError:
-            y_index = 0
+        y_index = remaining_cols.index(default_y) if default_y in remaining_cols else 0
         y_col = col2.selectbox("Y axis", remaining_cols, index=y_index, key=f"{prefix}_y")
 
         chart_options = ["Line Chart", "Bar Chart", "Pie Chart", "Scatter Chart", "Histogram Chart"]
-        default_type = st.session_state.get(f"{prefix}_type", "Line Chart")
-        try:
-            type_index = chart_options.index(default_type)
-        except ValueError:
-            type_index = 0
+        default_type = st.session_state.get(f"{prefix}_type", "Bar Chart")
+        type_index = chart_options.index(default_type) if default_type in chart_options else 0
         chart_type = col3.selectbox("Chart Type", chart_options, index=type_index, key=f"{prefix}_type")
 
         if chart_type == "Line Chart":
@@ -412,7 +365,6 @@ else:
 
     st.title("Cortex AI Assistant by DiLytics")
 
-    # Display the fixed semantic model
     semantic_model_filename = SEMANTIC_MODEL.split("/")[-1]
     st.markdown(f"Semantic Model: `{semantic_model_filename}`")
 
@@ -433,8 +385,8 @@ else:
     for message in st.session_state.chat_history:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
-            if message["role"] == "assistant" and "results" in message:
-                if message["results"] is not None and not message["results"].empty:
+            if message["role"] == "assistant" and "results" in message and message["results"] is not None:
+                if not message["results"].empty:
                     st.markdown("**Generated SQL Query:**")
                     with st.expander("View SQL Query", expanded=False):
                         st.code(message["sql"], language="sql")
@@ -459,104 +411,73 @@ else:
 
         # Add user query to chat history
         st.session_state.chat_history.append({"role": "user", "content": query})
-        with st.chat_message("user"):
-            st.markdown(query)
 
-        with st.chat_message("assistant"):
-            with st.spinner("Generating Response..."):
-                is_structured = is_structured_query(query)
-                is_complete = is_complete_query(query)
-                is_summarize = is_summarize_query(query)
-                is_suggestion = is_question_suggestion_query(query)
+        # Process the query and prepare assistant response
+        assistant_response = {"role": "assistant", "content": ""}
+        with st.spinner("Generating Response..."):
+            is_structured = is_structured_query(query)
+            is_complete = is_complete_query(query)
+            is_summarize = is_summarize_query(query)
+            is_suggestion = is_question_suggestion_query(query)
 
-                assistant_response = {"role": "assistant", "content": ""}
-                if is_suggestion:
-                    response_content = "**Here are some questions you can ask me:**\n"
-                    for i, q in enumerate(sample_questions, 1):
-                        response_content += f"{i}. {q}\n"
-                    response_content += "\nFeel free to ask any of these or come up with your own related to energy savings, Green Residences, or other programs!"
-                    st.markdown(response_content)
-                    assistant_response["content"] = response_content
+            if is_suggestion:
+                response_content = "**Here are some questions you can ask me:**\n"
+                for i, q in enumerate(sample_questions, 1):
+                    response_content += f"{i}. {q}\n"
+                response_content += "\nFeel free to ask any of these or come up with your own related to energy savings, Green Residences, or other programs!"
+                assistant_response["content"] = response_content
 
-                elif is_complete:
-                    response = complete(query)
-                    if response:
-                        response_content = f"**✍️ Generated Response:**\n{response}"
-                        st.markdown(response_content)
-                        assistant_response["content"] = response_content
-                    else:
-                        response_content = "⚠️ Failed to generate a response."
-                        st.warning(response_content)
-                        assistant_response["content"] = response_content
+            elif is_complete:
+                response = COMPLETE(query)
+                assistant_response["content"] = f"**✍️ Generated Response:**\n{response}" if response else "⚠️ Failed to generate a response."
 
-                elif is_summarize:
-                    summary = summarize(query)
-                    if summary:
+            elif is_summarize:
+                summary = SUMMARIZE(query)
+                assistant_response["content"] = f"**Summary:**\n{summary}" if summary else "⚠️ Failed to generate a summary."
+
+            elif is_structured:
+                response = snowflake_api_call(query, is_structured=True)
+                sql, _ = process_sse_response(response, is_structured=True)
+                if sql:
+                    results = run_snowflake_query(sql)
+                    if results is not None and not results.empty:
+                        summary = generate_result_summary(results)
                         response_content = f"**Summary:**\n{summary}"
-                        st.markdown(response_content)
-                        assistant_response["content"] = response_content
+                        assistant_response.update({
+                            "content": response_content,
+                            "sql": sql,
+                            "results": results,
+                            "summary": summary
+                        })
                     else:
-                        response_content = "⚠️ Failed to generate a summary."
-                        st.warning(response_content)
-                        assistant_response["content"] = response_content
-
-                elif is_structured:
-                    response = snowflake_api_call(query, is_structured=True)
-                    sql, _ = process_sse_response(response, is_structured=True)
-                    if sql:
-                        results = run_snowflake_query(sql)
-                        if results is not None and not results.empty:
-                            summary = generate_result_summary(results)
-                            response_content = f"**Generated SQL Query:**\n\n**Summary:**\n{summary}"
-                            st.markdown("**Generated SQL Query:**")
-                            with st.expander("View SQL Query", expanded=False):
-                                st.code(sql, language="sql")
-                            st.markdown("**Summary:**")
-                            st.write(summary)
-                            st.markdown(f"**Query Results ({len(results)} rows):**")
-                            st.dataframe(results)
-                            st.markdown("**📈 Visualization:**")
-                            display_chart_tab(results, prefix=f"chart_{hash(query)}")
-                            assistant_response.update({
-                                "content": response_content,
-                                "sql": sql,
-                                "results": results,
-                                "summary": summary
-                            })
-                        else:
-                            response_content = "⚠️ No data found."
-                            st.warning(response_content)
-                            assistant_response["content"] = response_content
-                    else:
-                        response_content = "⚠️ No SQL generated."
-                        st.warning(response_content)
-                        assistant_response["content"] = response_content
-
+                        assistant_response["content"] = "⚠️ No data found."
                 else:
-                    response = snowflake_api_call(query, is_structured=False)
-                    _, search_results = process_sse_response(response, is_structured=False)
-                    if search_results:
-                        raw_result = search_results[0]
-                        summary = summarize(raw_result)
-                        if summary:
-                            response_content = f"**Here is the Answer:**\n{summary}"
-                            last_sentence = summary.split(".")[-2] if "." in summary else summary
-                            st.markdown(response_content)
-                            st.success(f" Key Insight: {last_sentence.strip()}")
-                            assistant_response["content"] = response_content
-                        else:
-                            response_content = f"**🔍 Key Information (Unsummarized):**\n{summarize_unstructured_answer(raw_result)}"
-                            st.markdown(response_content)
-                            assistant_response["content"] = response_content
-                    else:
-                        response_content = "⚠️ No relevant search results found."
-                        st.warning(response_content)
-                        assistant_response["content"] = response_content
+                    assistant_response["content"] = "⚠️ No SQL generated."
 
-                # Add assistant response to chat history
-                st.session_state.chat_history.append(assistant_response)
-                # Update current query and results
-                st.session_state.current_query = query
-                st.session_state.current_results = assistant_response.get("results")
-                st.session_state.current_sql = assistant_response.get("sql")
-                st.session_state.current_summary = assistant_response.get("summary")
+            else:
+                response = snowflake_api_call(query, is_structured=False)
+                _, search_results = process_sse_response(response, is_structured=False)
+                if search_results:
+                    raw_result = search_results[0]
+                    summary = SUMMARIZE(raw_result)
+                    if summary:
+                        response_content = f"**Here is the Answer:**\n{summary}"
+                        last_sentence = summary.split(".")[-2] if "." in summary else summary
+                        response_content += f"\n\n**Key Insight:** {last_sentence.strip()}"
+                        assistant_response["content"] = response_content
+                    else:
+                        assistant_response["content"] = f"**🔍 Key Information (Unsummarized):**\n{summarize_unstructured_answer(raw_result)}"
+                else:
+                    assistant_response["content"] = "⚠️ No relevant search results found."
+
+            # Append assistant response to chat history only once
+            st.session_state.chat_history.append(assistant_response)
+
+            # Update current query and results
+            st.session_state.current_query = query
+            st.session_state.current_results = assistant_response.get("results")
+            st.session_state.current_sql = assistant_response.get("sql")
+            st.session_state.current_summary = assistant_response.get("summary")
+
+        # Rerun to update the UI with the new chat history
+        st.rerun()
