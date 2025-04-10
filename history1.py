@@ -126,7 +126,7 @@ else:
             columns = df.schema.names
             result_df = pd.DataFrame(data, columns=columns)
             return result_df
-        except Exception as e:
+        except Exception:
             return None
 
     def is_structured_query(query: str):
@@ -157,7 +157,7 @@ else:
             query = f"SELECT SNOWFLAKE.CORTEX.COMPLETE('{model}', '{prompt}') AS response"
             result = session.sql(query).collect()
             return result[0]["RESPONSE"]
-        except Exception as e:
+        except Exception:
             return None
 
     def SUMMARIZE(text):
@@ -166,7 +166,7 @@ else:
             query = f"SELECT SNOWFLAKE.CORTEX.SUMMARIZE('{text}') AS summary"
             result = session.sql(query).collect()
             return result[0]["SUMMARY"]
-        except Exception as e:
+        except Exception:
             return None
 
     def parse_sse_response(response_text: str) -> List[Dict]:
@@ -274,8 +274,8 @@ else:
             prompt = f"Provide a concise, meaningful summary of the following query results:\n\n{initial_summary}"
             meaningful_summary = COMPLETE(prompt)
             return meaningful_summary if meaningful_summary else "⚠️ Unable to generate a meaningful summary."
-        except Exception as e:
-            return f"⚠️ Summary generation failed: {str(e)}"
+        except Exception:
+            return "⚠️ Summary generation failed."
 
     # Visualization Function
     def display_chart_tab(df: pd.DataFrame, prefix: str = "chart"):
@@ -363,7 +363,7 @@ else:
                 "- [Contact Support](https://www.snowflake.com/en/support/)"
             )
 
-    st.title("Gen AI Assistant by DiLytics")
+    st.title("Cortex AI Assistant by DiLytics")
 
     semantic_model_filename = SEMANTIC_MODEL.split("/")[-1]
     st.markdown(f"Semantic Model: `{semantic_model_filename}`")
@@ -385,17 +385,16 @@ else:
     for message in st.session_state.chat_history:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
-            if message["role"] == "assistant" and "results" in message and message["results"] is not None:
-                if not message["results"].empty:
-                    st.markdown("**Generated SQL Query:**")
-                    with st.expander("View SQL Query", expanded=False):
-                        st.code(message["sql"], language="sql")
-                    st.markdown("**Summary:**")
-                    st.write(message["summary"])
-                    st.markdown(f"**Query Results ({len(message['results'])} rows):**")
-                    st.dataframe(message["results"])
-                    st.markdown("**📈 Visualization:**")
-                    display_chart_tab(message["results"], prefix=f"chart_{hash(message['content'])}")
+            if message["role"] == "assistant" and "results" in message and message["results"] is not None and not message["results"].empty:
+                st.markdown("**Generated SQL Query:**")
+                with st.expander("View SQL Query", expanded=False):
+                    st.code(message["sql"], language="sql")
+                st.markdown("**Summary:**")
+                st.write(message["summary"])
+                st.markdown(f"**Query Results ({len(message['results'])} rows):**")
+                st.dataframe(message["results"])
+                st.markdown("**📈 Visualization:**")
+                display_chart_tab(message["results"], prefix=f"chart_{hash(message['content'])}")
 
     query = st.chat_input("Ask your question...")
 
@@ -442,9 +441,8 @@ else:
                     results = run_snowflake_query(sql)
                     if results is not None and not results.empty:
                         summary = generate_result_summary(results)
-                        response_content = f"**Summary:**\n{summary}"
                         assistant_response.update({
-                            "content": response_content,
+                            "content": "**Generated SQL Query:**\n[View in expander below]\n\n**Summary:**\n" + summary,
                             "sql": sql,
                             "results": results,
                             "summary": summary
