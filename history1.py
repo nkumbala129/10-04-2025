@@ -229,7 +229,7 @@ else:
             else:
                 raise Exception(f"Failed request with status {resp.status_code}: {resp.text}")
         except Exception as e:
-            st.error(f"❌ API Request Failed: {str(e)}")
+            st.error.)f"❌ API Request Failed: {str(e)}")
             return None
 
     def summarize_unstructured_answer(answer):
@@ -397,7 +397,7 @@ else:
         with about_container:
             st.markdown("### About")
             st.write(
-                "This application uses **Snowflake Cortex Analyst** to interpret "
+                "This application uses **Snowflake cortex Analyst** to interpret "
                 "your natural language questions and generate data insights. "
                 "Simply ask a question below to see relevant answers and visualizations."
             )
@@ -410,7 +410,7 @@ else:
                 "- [Contact Support](https://www.snowflake.com/en/support/)"
             )
 
-        st.title("Cortex AI Assistant by DiLytics")
+    st.title("Cortex AI Assistant by DiLytics")
 
     # Display the fixed semantic model
     semantic_model_filename = SEMANTIC_MODEL.split("/")[-1]
@@ -436,7 +436,7 @@ else:
             if message["role"] == "assistant" and "results" in message and message["results"] is not None and not message["results"].empty:
                 with st.expander("View SQL Query", expanded=False):
                     st.code(message["sql"], language="sql")
-                st.markdown("**Generated Query Summary:**")
+                st.markdown("**✍️ Generated Response:**")
                 st.write(message["summary"])
                 st.markdown(f"**Query Results ({len(message['results'])} rows):**")
                 st.dataframe(message["results"])
@@ -505,7 +505,7 @@ else:
                         results = run_snowflake_query(sql)
                         if results is not None and not results.empty:
                             summary = generate_result_summary(results)
-                            response_content = f"**Generated Query Summary:**\n{summary}"
+                            response_content = f"**✍️ Generated Response:**\n{summary}"
                             st.markdown(response_content)
                             with st.expander("View SQL Query", expanded=False):
                                 st.code(sql, language="sql")
