@@ -453,7 +453,7 @@ else:
                         if results is not None and not results.empty:
                             # Convert results to string and use complete function for natural language summary
                             results_text = results.to_string(index=False)
-                            prompt = f"Convert the following query results into a concise natural language summary for the query '{query}':\n\n{results_text}"
+                            prompt = f"Provide a concise natural language answer to the query '{query}' using the following data, avoiding phrases like 'Based on the query results':\n\n{results_text}"
                             summary = complete(prompt)
                             if not summary:
                                 summary = "⚠️ Unable to generate a natural language summary."
