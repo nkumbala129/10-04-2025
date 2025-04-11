@@ -410,7 +410,7 @@ else:
                 "- [Contact Support](https://www.snowflake.com/en/support/)"
             )
 
-    st.title("Cortex AI Assistant by DiLytics")
+        st.title("Cortex AI Assistant by DiLytics")
 
     # Display the fixed semantic model
     semantic_model_filename = SEMANTIC_MODEL.split("/")[-1]
@@ -433,17 +433,15 @@ else:
     for message in st.session_state.chat_history:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
-            if message["role"] == "assistant" and "results" in message:
-                if message["results"] is not None and not message["results"].empty:
-                    st.markdown("**Generated SQL Query:**")
-                    with st.expander("View SQL Query", expanded=False):
-                        st.code(message["sql"], language="sql")
-                    st.markdown("**Summary:**")
-                    st.write(message["summary"])
-                    st.markdown(f"**Query Results ({len(message['results'])} rows):**")
-                    st.dataframe(message["results"])
-                    st.markdown("**📈 Visualization:**")
-                    display_chart_tab(message["results"], prefix=f"chart_{hash(message['content'])}")
+            if message["role"] == "assistant" and "results" in message and message["results"] is not None and not message["results"].empty:
+                with st.expander("View SQL Query", expanded=False):
+                    st.code(message["sql"], language="sql")
+                st.markdown("**Generated Query Summary:**")
+                st.write(message["summary"])
+                st.markdown(f"**Query Results ({len(message['results'])} rows):**")
+                st.dataframe(message["results"])
+                st.markdown("**📈 Visualization:**")
+                display_chart_tab(message["results"], prefix=f"chart_{hash(message['content'])}")
 
     query = st.chat_input("Ask your question...")
 
@@ -507,12 +505,10 @@ else:
                         results = run_snowflake_query(sql)
                         if results is not None and not results.empty:
                             summary = generate_result_summary(results)
-                            response_content = f"**Generated SQL Query:**\n\n**Summary:**\n{summary}"
-                            st.markdown("**Generated SQL Query:**")
+                            response_content = f"**Generated Query Summary:**\n{summary}"
+                            st.markdown(response_content)
                             with st.expander("View SQL Query", expanded=False):
                                 st.code(sql, language="sql")
-                            st.markdown("**Summary:**")
-                            st.write(summary)
                             st.markdown(f"**Query Results ({len(results)} rows):**")
                             st.dataframe(results)
                             st.markdown("**📈 Visualization:**")
