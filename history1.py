@@ -7,7 +7,6 @@ import pandas as pd
 from snowflake.snowpark import Session
 from typing import Any, Dict, List, Optional, Tuple
 import plotly.express as px
-import time  # Added for timestamp-based unique keys
 
 # Snowflake/Cortex Configuration
 HOST = "GNB14769.snowflakecomputing.com"
@@ -297,14 +296,14 @@ else:
         col1, col2, col3 = st.columns(3)
 
         # X-axis dropdown
-        x_key = f"{prefix}_x_{int(time.time() * 1000)}"
+        x_key = f"{prefix}_x"
         x_col = col1.selectbox("X axis", all_cols, index=all_cols.index(st.session_state[state_key]["x_col"]), key=x_key)
         if x_col != st.session_state[state_key]["x_col"]:
             st.session_state[state_key]["x_col"] = x_col
 
         # Y-axis dropdown
         remaining_cols = [c for c in all_cols if c != x_col]
-        y_key = f"{prefix}_y_{int(time.time() * 1000)}"
+        y_key = f"{prefix}_y"
         y_default = st.session_state[state_key]["y_col"] if st.session_state[state_key]["y_col"] in remaining_cols else remaining_cols[0]
         y_col = col2.selectbox("Y axis", remaining_cols, index=remaining_cols.index(y_default), key=y_key)
         if y_col != st.session_state[state_key]["y_col"]:
@@ -312,7 +311,7 @@ else:
 
         # Chart type dropdown
         chart_options = ["Line Chart", "Bar Chart", "Pie Chart", "Scatter Chart", "Histogram Chart"]
-        type_key = f"{prefix}_type_{int(time.time() * 1000)}"
+        type_key = f"{prefix}_type"
         chart_type = col3.selectbox("Chart Type", chart_options, index=chart_options.index(st.session_state[state_key]["chart_type"]), key=type_key)
         if chart_type != st.session_state[state_key]["chart_type"]:
             st.session_state[state_key]["chart_type"] = chart_type
@@ -320,7 +319,7 @@ else:
         # Render chart in a unique container
         chart_container = st.container()
         with chart_container:
-            chart_key = f"{prefix}_chart_{int(time.time() * 1000)}"
+            chart_key = f"{prefix}_chart"
             if chart_type == "Line Chart":
                 fig = px.line(df, x=x_col, y=y_col, title=chart_type)
                 st.plotly_chart(fig, key=chart_key)
@@ -411,11 +410,11 @@ else:
                 with st.expander("View SQL Query", expanded=False):
                     st.code(message["sql"], language="sql")
                 st.markdown(f"**Query Results ({len(message['results'])} rows):**")
-                st.dataframe(message["results"], key=f"results_{idx}_{int(time.time() * 1000)}")
+                st.dataframe(message["results"], key=f"results_{idx}")
                 # Only show visualization if it can be rendered
                 if not message["results"].empty and len(message["results"].columns) >= 2:
                     st.markdown("**📈 Visualization:**")
-                    prefix = f"chart_{idx}_{int(time.time() * 1000)}"
+                    prefix = f"chart_{idx}"
                     display_chart_tab(message["results"], prefix=prefix, query=message.get("query", ""))
 
     query = st.chat_input("Ask your question...")
@@ -490,12 +489,12 @@ else:
                             with st.expander("View SQL Query", expanded=False):
                                 st.code(sql, language="sql")
                             st.markdown(f"**Query Results ({len(results)} rows):**")
-                            results_key = f"results_new_{int(time.time() * 1000)}"
+                            results_key = f"results_new_{len(st.session_state.chat_history)}"
                             st.dataframe(results, key=results_key)
                             # Only show visualization if it can be rendered
                             if len(results.columns) >= 2:
                                 st.markdown("**📈 Visualization:**")
-                                prefix = f"chart_{len(st.session_state.chat_history)}_{int(time.time() * 1000)}"
+                                prefix = f"chart_{len(st.session_state.chat_history)}"
                                 display_chart_tab(results, prefix=prefix, query=query)
                             assistant_response.update({
                                 "content": response_content,
