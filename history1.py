@@ -6,7 +6,7 @@ import snowflake.connector
 import pandas as pd
 from snowflake.snowpark import Session
 from typing import Any, Dict, List, Optional, Tuple
-import plotly.express as px
+import plotly.express as px  # Added for interactive visualizations
 
 # Snowflake/Cortex Configuration
 HOST = "GNB14769.snowflakecomputing.com"
@@ -282,65 +282,46 @@ else:
             default_chart = "Bar Chart"
 
         all_cols = list(df.columns)
-
-        # Initialize session state for this chart instance
-        state_key = f"{prefix}_state"
-        if state_key not in st.session_state:
-            st.session_state[state_key] = {
-                "x_col": all_cols[0],
-                "y_col": all_cols[1] if len(all_cols) > 1 else all_cols[0],
-                "chart_type": default_chart,
-                "update_count": 0  # Track changes for chart key
-            }
-
-        # Create columns for dropdowns
         col1, col2, col3 = st.columns(3)
 
-        # X-axis dropdown
-        x_key = f"{prefix}_x"
-        x_col = col1.selectbox("X axis", all_cols, index=all_cols.index(st.session_state[state_key]["x_col"]), key=x_key)
-        if x_col != st.session_state[state_key]["x_col"]:
-            st.session_state[state_key]["x_col"] = x_col
-            st.session_state[state_key]["update_count"] += 1
+        default_x = st.session_state.get(f"{prefix}_x", all_cols[0])
+        try:
+            x_index = all_cols.index(default_x)
+        except ValueError:
+            x_index = 0
+        x_col = col1.selectbox("X axis", all_cols, index=x_index, key=f"{prefix}_x")
 
-        # Y-axis dropdown
         remaining_cols = [c for c in all_cols if c != x_col]
-        y_key = f"{prefix}_y"
-        y_default = st.session_state[state_key]["y_col"] if st.session_state[state_key]["y_col"] in remaining_cols else remaining_cols[0]
-        y_col = col2.selectbox("Y axis", remaining_cols, index=remaining_cols.index(y_default), key=y_key)
-        if y_col != st.session_state[state_key]["y_col"]:
-            st.session_state[state_key]["y_col"] = y_col
-            st.session_state[state_key]["update_count"] += 1
+        default_y = st.session_state.get(f"{prefix}_y", remaining_cols[0])
+        try:
+            y_index = remaining_cols.index(default_y)
+        except ValueError:
+            y_index = 0
+        y_col = col2.selectbox("Y axis", remaining_cols, index=y_index, key=f"{prefix}_y")
 
-        # Chart type dropdown
         chart_options = ["Line Chart", "Bar Chart", "Pie Chart", "Scatter Chart", "Histogram Chart"]
-        type_key = f"{prefix}_type"
-        chart_type = col3.selectbox("Chart Type", chart_options, index=chart_options.index(st.session_state[state_key]["chart_type"]), key=type_key)
-        # Always update chart_type and increment update_count to force redraw
-        if chart_type != st.session_state[state_key]["chart_type"]:
-            st.session_state[state_key]["chart_type"] = chart_type
-            st.session_state[state_key]["update_count"] += 1
+        default_type = st.session_state.get(f"{prefix}_type", default_chart)
+        try:
+            type_index = chart_options.index(default_type)
+        except ValueError:
+            type_index = chart_options.index(default_chart)
+        chart_type = col3.selectbox("Chart Type", chart_options, index=type_index, key=f"{prefix}_type")
 
-        # Render chart in a unique container
-        chart_container = st.container()
-        with chart_container:
-            # Use update_count in chart_key to force redraw on every change
-            chart_key = f"{prefix}_chart_{st.session_state[state_key]['update_count']}"
-            if chart_type == "Line Chart":
-                fig = px.line(df, x=x_col, y=y_col, title=chart_type)
-                st.plotly_chart(fig, key=chart_key)
-            elif chart_type == "Bar Chart":
-                fig = px.bar(df, x=x_col, y=y_col, title=chart_type)
-                st.plotly_chart(fig, key=chart_key)
-            elif chart_type == "Pie Chart":
-                fig = px.pie(df, names=x_col, values=y_col, title=chart_type)
-                st.plotly_chart(fig, key=chart_key)
-            elif chart_type == "Scatter Chart":
-                fig = px.scatter(df, x=x_col, y=y_col, title=chart_type)
-                st.plotly_chart(fig, key=chart_key)
-            elif chart_type == "Histogram Chart":
-                fig = px.histogram(df, x=x_col, title=chart_type)
-                st.plotly_chart(fig, key=chart_key)
+        if chart_type == "Line Chart":
+            fig = px.line(df, x=x_col, y=y_col, title=chart_type)
+            st.plotly_chart(fig, key=f"{prefix}_line")
+        elif chart_type == "Bar Chart":
+            fig = px.bar(df, x=x_col, y=y_col, title=chart_type)
+            st.plotly_chart(fig, key=f"{prefix}_bar")
+        elif chart_type == "Pie Chart":
+            fig = px.pie(df, names=x_col, values=y_col, title=chart_type)
+            st.plotly_chart(fig, key=f"{prefix}_pie")
+        elif chart_type == "Scatter Chart":
+            fig = px.scatter(df, x=x_col, y=y_col, title=chart_type)
+            st.plotly_chart(fig, key=f"{prefix}_scatter")
+        elif chart_type == "Histogram Chart":
+            fig = px.histogram(df, x=x_col, title=chart_type)
+            st.plotly_chart(fig, key=f"{prefix}_hist")
 
     # UI Logic
     with st.sidebar:
@@ -409,19 +390,18 @@ else:
     ]
 
     # Display chat history
-    for idx, message in enumerate(st.session_state.chat_history):
+    for message in st.session_state.chat_history:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
             if message["role"] == "assistant" and "results" in message and message["results"] is not None:
                 with st.expander("View SQL Query", expanded=False):
                     st.code(message["sql"], language="sql")
                 st.markdown(f"**Query Results ({len(message['results'])} rows):**")
-                st.dataframe(message["results"], key=f"results_{idx}")
+                st.dataframe(message["results"])
                 # Only show visualization if it can be rendered
                 if not message["results"].empty and len(message["results"].columns) >= 2:
                     st.markdown("**📈 Visualization:**")
-                    prefix = f"chart_{idx}"
-                    display_chart_tab(message["results"], prefix=prefix, query=message.get("query", ""))
+                    display_chart_tab(message["results"], prefix=f"chart_{hash(message['content'])}", query=message.get("query", ""))
 
     query = st.chat_input("Ask your question...")
 
@@ -495,13 +475,11 @@ else:
                             with st.expander("View SQL Query", expanded=False):
                                 st.code(sql, language="sql")
                             st.markdown(f"**Query Results ({len(results)} rows):**")
-                            results_key = f"results_new_{len(st.session_state.chat_history)}"
-                            st.dataframe(results, key=results_key)
+                            st.dataframe(results)
                             # Only show visualization if it can be rendered
                             if len(results.columns) >= 2:
                                 st.markdown("**📈 Visualization:**")
-                                prefix = f"chart_{len(st.session_state.chat_history)}"
-                                display_chart_tab(results, prefix=prefix, query=query)
+                                display_chart_tab(results, prefix=f"chart_{hash(query)}", query=query)
                             assistant_response.update({
                                 "content": response_content,
                                 "sql": sql,
