@@ -393,13 +393,15 @@ else:
     for message in st.session_state.chat_history:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
-            if message["role"] == "assistant" and "results" in message and message["results"] is not None and not message["results"].empty:
+            if message["role"] == "assistant" and "results" in message and message["results"] is not None:
                 with st.expander("View SQL Query", expanded=False):
                     st.code(message["sql"], language="sql")
                 st.markdown(f"**Query Results ({len(message['results'])} rows):**")
                 st.dataframe(message["results"])
-                st.markdown("**📈 Visualization:**")
-                display_chart_tab(message["results"], prefix=f"chart_{hash(message['content'])}", query=message.get("query", ""))
+                # Only show visualization if it can be rendered
+                if not message["results"].empty and len(message["results"].columns) >= 2:
+                    st.markdown("**📈 Visualization:**")
+                    display_chart_tab(message["results"], prefix=f"chart_{hash(message['content'])}", query=message.get("query", ""))
 
     query = st.chat_input("Ask your question...")
 
@@ -474,8 +476,10 @@ else:
                                 st.code(sql, language="sql")
                             st.markdown(f"**Query Results ({len(results)} rows):**")
                             st.dataframe(results)
-                            st.markdown("**📈 Visualization:**")
-                            display_chart_tab(results, prefix=f"chart_{hash(query)}", query=query)
+                            # Only show visualization if it can be rendered
+                            if len(results.columns) >= 2:
+                                st.markdown("**📈 Visualization:**")
+                                display_chart_tab(results, prefix=f"chart_{hash(query)}", query=query)
                             assistant_response.update({
                                 "content": response_content,
                                 "sql": sql,
