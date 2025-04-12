@@ -54,10 +54,15 @@ if "current_sql" not in st.session_state:
 if "current_summary" not in st.session_state:
     st.session_state.current_summary = None
 
-# Hide Streamlit branding
+# Hide Streamlit branding and prevent chat history shading
 st.markdown("""
 <style>
 #MainMenu, header, footer {visibility: hidden;}
+/* Prevent shading of previous chat messages */
+[data-testid="stChatMessage"] {
+    opacity: 1 !important;
+    background-color: transparent !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -262,11 +267,19 @@ else:
         return sql.strip(), search_results
 
     # Visualization Function
-    def display_chart_tab(df: pd.DataFrame, prefix: str = "chart"):
+    def display_chart_tab(df: pd.DataFrame, prefix: str = "chart", query: str = ""):
         """Allows user to select chart options and displays a chart with unique widget keys."""
-        if len(df.columns) < 2:
-            st.write("Not enough columns to chart.")
-            return
+        if df.empty or len(df.columns) < 2:
+            return  # Do not show anything if visualization is not possible
+
+        # Determine default chart type based on query
+        query_lower = query.lower()
+        if re.search(r'\b(county|jurisdiction)\b', query_lower):
+            default_chart = "Pie Chart"
+        elif re.search(r'\b(month|year|date)\b', query_lower):
+            default_chart = "Line Chart"
+        else:
+            default_chart = "Bar Chart"
 
         all_cols = list(df.columns)
         col1, col2, col3 = st.columns(3)
@@ -287,11 +300,11 @@ else:
         y_col = col2.selectbox("Y axis", remaining_cols, index=y_index, key=f"{prefix}_y")
 
         chart_options = ["Line Chart", "Bar Chart", "Pie Chart", "Scatter Chart", "Histogram Chart"]
-        default_type = st.session_state.get(f"{prefix}_type", "Bar Chart")
+        default_type = st.session_state.get(f"{prefix}_type", default_chart)
         try:
             type_index = chart_options.index(default_type)
         except ValueError:
-            type_index = 0
+            type_index = chart_options.index(default_chart)
         chart_type = col3.selectbox("Chart Type", chart_options, index=type_index, key=f"{prefix}_type")
 
         if chart_type == "Line Chart":
@@ -386,7 +399,7 @@ else:
                 st.markdown(f"**Query Results ({len(message['results'])} rows):**")
                 st.dataframe(message["results"])
                 st.markdown("**📈 Visualization:**")
-                display_chart_tab(message["results"], prefix=f"chart_{hash(message['content'])}")
+                display_chart_tab(message["results"], prefix=f"chart_{hash(message['content'])}", query=message.get("query", ""))
 
     query = st.chat_input("Ask your question...")
 
@@ -398,7 +411,7 @@ else:
         # Reset chart selections for new query
         st.session_state.chart_x_axis = None
         st.session_state.chart_y_axis = None
-        st.session_state.chart_type = "Bar Chart"
+        st.session_state.chart_type = "Bar Chart"  # Will be overridden in display_chart_tab based on query
 
         # Add user query to chat history
         st.session_state.chat_history.append({"role": "user", "content": query})
@@ -412,7 +425,7 @@ else:
                 is_summarize = is_summarize_query(query)
                 is_suggestion = is_question_suggestion_query(query)
 
-                assistant_response = {"role": "assistant", "content": ""}
+                assistant_response = {"role": "assistant", "content": "", "query": query}
                 if is_suggestion:
                     response_content = "**Here are some questions you can ask me:**\n"
                     for i, q in enumerate(sample_questions, 1):
@@ -462,7 +475,7 @@ else:
                             st.markdown(f"**Query Results ({len(results)} rows):**")
                             st.dataframe(results)
                             st.markdown("**📈 Visualization:**")
-                            display_chart_tab(results, prefix=f"chart_{hash(query)}")
+                            display_chart_tab(results, prefix=f"chart_{hash(query)}", query=query)
                             assistant_response.update({
                                 "content": response_content,
                                 "sql": sql,
