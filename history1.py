@@ -6,7 +6,8 @@ import snowflake.connector
 import pandas as pd
 from snowflake.snowpark import Session
 from typing import Any, Dict, List, Optional, Tuple
-import plotly.express as px  # Added for interactive visualizations
+import plotly.express as px
+import time  # Added for timestamp-based unique keys
 
 # Snowflake/Cortex Configuration
 HOST = "GNB14769.snowflakecomputing.com"
@@ -282,62 +283,59 @@ else:
             default_chart = "Bar Chart"
 
         all_cols = list(df.columns)
+
+        # Initialize session state for this chart instance
+        state_key = f"{prefix}_state"
+        if state_key not in st.session_state:
+            st.session_state[state_key] = {
+                "x_col": all_cols[0],
+                "y_col": all_cols[1] if len(all_cols) > 1 else all_cols[0],
+                "chart_type": default_chart
+            }
+
+        # Create columns for dropdowns
         col1, col2, col3 = st.columns(3)
 
         # X-axis dropdown
-        x_key = f"{prefix}_x_{hash(query)}"  # Unique key for X-axis
-        default_x = st.session_state.get(x_key, all_cols[0])
-        try:
-            x_index = all_cols.index(default_x)
-        except ValueError:
-            x_index = 0
-        x_col = col1.selectbox("X axis", all_cols, index=x_index, key=x_key)
-        if x_col != st.session_state.get(x_key):
-            st.session_state[x_key] = x_col
-            st.rerun()  # Force rerun to update chart immediately
+        x_key = f"{prefix}_x_{int(time.time() * 1000)}"
+        x_col = col1.selectbox("X axis", all_cols, index=all_cols.index(st.session_state[state_key]["x_col"]), key=x_key)
+        if x_col != st.session_state[state_key]["x_col"]:
+            st.session_state[state_key]["x_col"] = x_col
 
         # Y-axis dropdown
         remaining_cols = [c for c in all_cols if c != x_col]
-        y_key = f"{prefix}_y_{hash(query)}"  # Unique key for Y-axis
-        default_y = st.session_state.get(y_key, remaining_cols[0] if remaining_cols else all_cols[0])
-        try:
-            y_index = remaining_cols.index(default_y) if remaining_cols else 0
-        except ValueError:
-            y_index = 0
-        y_col = col2.selectbox("Y axis", remaining_cols, index=y_index, key=y_key)
-        if y_col != st.session_state.get(y_key):
-            st.session_state[y_key] = y_col
-            st.rerun()  # Force rerun to update chart immediately
+        y_key = f"{prefix}_y_{int(time.time() * 1000)}"
+        y_default = st.session_state[state_key]["y_col"] if st.session_state[state_key]["y_col"] in remaining_cols else remaining_cols[0]
+        y_col = col2.selectbox("Y axis", remaining_cols, index=remaining_cols.index(y_default), key=y_key)
+        if y_col != st.session_state[state_key]["y_col"]:
+            st.session_state[state_key]["y_col"] = y_col
 
         # Chart type dropdown
         chart_options = ["Line Chart", "Bar Chart", "Pie Chart", "Scatter Chart", "Histogram Chart"]
-        type_key = f"{prefix}_type_{hash(query)}"  # Unique key for chart type
-        default_type = st.session_state.get(type_key, default_chart)
-        try:
-            type_index = chart_options.index(default_type)
-        except ValueError:
-            type_index = chart_options.index(default_chart)
-        chart_type = col3.selectbox("Chart Type", chart_options, index=type_index, key=type_key)
-        if chart_type != st.session_state.get(type_key):
-            st.session_state[type_key] = chart_type
-            st.rerun()  # Force rerun to update chart immediately
+        type_key = f"{prefix}_type_{int(time.time() * 1000)}"
+        chart_type = col3.selectbox("Chart Type", chart_options, index=chart_options.index(st.session_state[state_key]["chart_type"]), key=type_key)
+        if chart_type != st.session_state[state_key]["chart_type"]:
+            st.session_state[state_key]["chart_type"] = chart_type
 
-        # Render chart based on selections
-        if chart_type == "Line Chart":
-            fig = px.line(df, x=x_col, y=y_col, title=chart_type)
-            st.plotly_chart(fig, key=f"{prefix}_line_{hash(query)}")
-        elif chart_type == "Bar Chart":
-            fig = px.bar(df, x=x_col, y=y_col, title=chart_type)
-            st.plotly_chart(fig, key=f"{prefix}_bar_{hash(query)}")
-        elif chart_type == "Pie Chart":
-            fig = px.pie(df, names=x_col, values=y_col, title=chart_type)
-            st.plotly_chart(fig, key=f"{prefix}_pie_{hash(query)}")
-        elif chart_type == "Scatter Chart":
-            fig = px.scatter(df, x=x_col, y=y_col, title=chart_type)
-            st.plotly_chart(fig, key=f"{prefix}_scatter_{hash(query)}")
-        elif chart_type == "Histogram Chart":
-            fig = px.histogram(df, x=x_col, title=chart_type)
-            st.plotly_chart(fig, key=f"{prefix}_hist_{hash(query)}")
+        # Render chart in a unique container
+        chart_container = st.container()
+        with chart_container:
+            chart_key = f"{prefix}_chart_{int(time.time() * 1000)}"
+            if chart_type == "Line Chart":
+                fig = px.line(df, x=x_col, y=y_col, title=chart_type)
+                st.plotly_chart(fig, key=chart_key)
+            elif chart_type == "Bar Chart":
+                fig = px.bar(df, x=x_col, y=y_col, title=chart_type)
+                st.plotly_chart(fig, key=chart_key)
+            elif chart_type == "Pie Chart":
+                fig = px.pie(df, names=x_col, values=y_col, title=chart_type)
+                st.plotly_chart(fig, key=chart_key)
+            elif chart_type == "Scatter Chart":
+                fig = px.scatter(df, x=x_col, y=y_col, title=chart_type)
+                st.plotly_chart(fig, key=chart_key)
+            elif chart_type == "Histogram Chart":
+                fig = px.histogram(df, x=x_col, title=chart_type)
+                st.plotly_chart(fig, key=chart_key)
 
     # UI Logic
     with st.sidebar:
@@ -413,12 +411,12 @@ else:
                 with st.expander("View SQL Query", expanded=False):
                     st.code(message["sql"], language="sql")
                 st.markdown(f"**Query Results ({len(message['results'])} rows):**")
-                st.dataframe(message["results"])
+                st.dataframe(message["results"], key=f"results_{idx}_{int(time.time() * 1000)}")
                 # Only show visualization if it can be rendered
                 if not message["results"].empty and len(message["results"].columns) >= 2:
                     st.markdown("**📈 Visualization:**")
-                    # Use message index to ensure unique prefix
-                    display_chart_tab(message["results"], prefix=f"chart_{idx}_{hash(message['content'])}", query=message.get("query", ""))
+                    prefix = f"chart_{idx}_{int(time.time() * 1000)}"
+                    display_chart_tab(message["results"], prefix=prefix, query=message.get("query", ""))
 
     query = st.chat_input("Ask your question...")
 
@@ -492,12 +490,13 @@ else:
                             with st.expander("View SQL Query", expanded=False):
                                 st.code(sql, language="sql")
                             st.markdown(f"**Query Results ({len(results)} rows):**")
-                            st.dataframe(results)
+                            results_key = f"results_new_{int(time.time() * 1000)}"
+                            st.dataframe(results, key=results_key)
                             # Only show visualization if it can be rendered
                             if len(results.columns) >= 2:
                                 st.markdown("**📈 Visualization:**")
-                                # Use length of chat_history for new query to ensure uniqueness
-                                display_chart_tab(results, prefix=f"chart_{len(st.session_state.chat_history)}_{hash(query)}", query=query)
+                                prefix = f"chart_{len(st.session_state.chat_history)}_{int(time.time() * 1000)}"
+                                display_chart_tab(results, prefix=prefix, query=query)
                             assistant_response.update({
                                 "content": response_content,
                                 "sql": sql,
