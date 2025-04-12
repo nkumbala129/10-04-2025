@@ -12,7 +12,7 @@ import plotly.express as px  # Added for interactive visualizations
 HOST = "GNB14769.snowflakecomputing.com"
 DATABASE = "CORTEX_SEARCH_TUTORIAL_DB"
 SCHEMA = "PUBLIC"
-STAGE = "CC_STAGE"
+# STAGE = "CC_STAGE"
 API_ENDPOINT = "/api/v2/cortex/agent:run"
 API_TIMEOUT = 50000  # in milliseconds
 CORTEX_SEARCH_SERVICES = "CORTEX_SEARCH_TUTORIAL_DB.PUBLIC.BAYREN2"
@@ -23,7 +23,7 @@ SEMANTIC_MODEL = '@"CORTEX_SEARCH_TUTORIAL_DB"."PUBLIC"."MULTIFAMILYSTAGE"/Green
 # Streamlit Page Config
 st.set_page_config(
     page_title="Welcome to Cortex AI Assistant ",
-    layout="wide",
+    layout="centered",
     initial_sidebar_state="auto"
 )
 
