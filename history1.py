@@ -287,7 +287,7 @@ else:
         y_col = col2.selectbox("Y axis", remaining_cols, index=y_index, key=f"{prefix}_y")
 
         chart_options = ["Line Chart", "Bar Chart", "Pie Chart", "Scatter Chart", "Histogram Chart"]
-        default_type = st.session_state.get(f"{prefix}_type", "Line Chart")
+        default_type = st.session_state.get(f"{prefix}_type", "Bar Chart")
         try:
             type_index = chart_options.index(default_type)
         except ValueError:
