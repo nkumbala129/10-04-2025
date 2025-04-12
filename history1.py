@@ -406,7 +406,7 @@ else:
     ]
 
     # Display chat history
-    for message in st.session_state.chat_history:
+    for idx, message in enumerate(st.session_state.chat_history):
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
             if message["role"] == "assistant" and "results" in message and message["results"] is not None:
@@ -417,7 +417,8 @@ else:
                 # Only show visualization if it can be rendered
                 if not message["results"].empty and len(message["results"].columns) >= 2:
                     st.markdown("**📈 Visualization:**")
-                    display_chart_tab(message["results"], prefix=f"chart_{hash(message['content'])}", query=message.get("query", ""))
+                    # Use message index to ensure unique prefix
+                    display_chart_tab(message["results"], prefix=f"chart_{idx}_{hash(message['content'])}", query=message.get("query", ""))
 
     query = st.chat_input("Ask your question...")
 
@@ -495,7 +496,8 @@ else:
                             # Only show visualization if it can be rendered
                             if len(results.columns) >= 2:
                                 st.markdown("**📈 Visualization:**")
-                                display_chart_tab(results, prefix=f"chart_{hash(query)}", query=query)
+                                # Use length of chat_history for new query to ensure uniqueness
+                                display_chart_tab(results, prefix=f"chart_{len(st.session_state.chat_history)}_{hash(query)}", query=query)
                             assistant_response.update({
                                 "content": response_content,
                                 "sql": sql,
