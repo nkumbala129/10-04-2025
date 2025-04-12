@@ -58,10 +58,17 @@ if "current_summary" not in st.session_state:
 st.markdown("""
 <style>
 #MainMenu, header, footer {visibility: hidden;}
-/* Prevent shading of previous chat messages */
+/* Prevent shading of all chat messages */
 [data-testid="stChatMessage"] {
     opacity: 1 !important;
     background-color: transparent !important;
+    filter: none !important; /* Ensure no filters (e.g., brightness) are applied */
+    transition: none !important; /* Disable any transition effects causing shading */
+}
+/* Target nested elements to ensure no inherited shading */
+[data-testid="stChatMessage"] * {
+    opacity: 1 !important;
+    background-color: inherit !important;
 }
 </style>
 """, unsafe_allow_html=True)
