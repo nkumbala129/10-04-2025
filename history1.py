@@ -289,7 +289,8 @@ else:
             st.session_state[state_key] = {
                 "x_col": all_cols[0],
                 "y_col": all_cols[1] if len(all_cols) > 1 else all_cols[0],
-                "chart_type": default_chart
+                "chart_type": default_chart,
+                "update_count": 0  # Track changes for chart key
             }
 
         # Create columns for dropdowns
@@ -300,6 +301,7 @@ else:
         x_col = col1.selectbox("X axis", all_cols, index=all_cols.index(st.session_state[state_key]["x_col"]), key=x_key)
         if x_col != st.session_state[state_key]["x_col"]:
             st.session_state[state_key]["x_col"] = x_col
+            st.session_state[state_key]["update_count"] += 1
 
         # Y-axis dropdown
         remaining_cols = [c for c in all_cols if c != x_col]
@@ -308,18 +310,22 @@ else:
         y_col = col2.selectbox("Y axis", remaining_cols, index=remaining_cols.index(y_default), key=y_key)
         if y_col != st.session_state[state_key]["y_col"]:
             st.session_state[state_key]["y_col"] = y_col
+            st.session_state[state_key]["update_count"] += 1
 
         # Chart type dropdown
         chart_options = ["Line Chart", "Bar Chart", "Pie Chart", "Scatter Chart", "Histogram Chart"]
         type_key = f"{prefix}_type"
         chart_type = col3.selectbox("Chart Type", chart_options, index=chart_options.index(st.session_state[state_key]["chart_type"]), key=type_key)
+        # Always update chart_type and increment update_count to force redraw
         if chart_type != st.session_state[state_key]["chart_type"]:
             st.session_state[state_key]["chart_type"] = chart_type
+            st.session_state[state_key]["update_count"] += 1
 
         # Render chart in a unique container
         chart_container = st.container()
         with chart_container:
-            chart_key = f"{prefix}_chart"
+            # Use update_count in chart_key to force redraw on every change
+            chart_key = f"{prefix}_chart_{st.session_state[state_key]['update_count']}"
             if chart_type == "Line Chart":
                 fig = px.line(df, x=x_col, y=y_col, title=chart_type)
                 st.plotly_chart(fig, key=chart_key)
