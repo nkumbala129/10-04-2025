@@ -39,11 +39,11 @@ if "debug_mode" not in st.session_state:
     st.session_state.debug_mode = False
 # Initialize chart selection persistence
 if "chart_x_axis" not in st.session_state:
-    st.session_state.chart_x_axis = {}
+    st.session_state.chart_x_axis = None
 if "chart_y_axis" not in st.session_state:
-    st.session_state.chart_y_axis = {}
+    st.session_state.chart_y_axis = None
 if "chart_type" not in st.session_state:
-    st.session_state.chart_type = {}
+    st.session_state.chart_type = "Bar Chart"
 # Initialize query and results persistence
 if "current_query" not in st.session_state:
     st.session_state.current_query = None
@@ -59,12 +59,9 @@ st.markdown("""
 <style>
 #MainMenu, header, footer {visibility: hidden;}
 /* Prevent shading of previous chat messages */
-[data-testid="stChatMessage"],
-[data-testid="stChatMessage"] * {
+[data-testid="stChatMessage"] {
     opacity: 1 !important;
     background-color: transparent !important;
-    filter: none !important;
-    transition: none !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -76,9 +73,9 @@ def start_new_conversation():
     st.session_state.current_results = None
     st.session_state.current_sql = None
     st.session_state.current_summary = None
-    st.session_state.chart_x_axis = {}
-    st.session_state.chart_y_axis = {}
-    st.session_state.chart_type = {}
+    st.session_state.chart_x_axis = None
+    st.session_state.chart_y_axis = None
+    st.session_state.chart_type = "Bar Chart"
     st.rerun()
 
 # Authentication logic
@@ -119,7 +116,7 @@ if not st.session_state.authenticated:
             st.success("Authentication successful! Redirecting...")
             st.rerun()
 
-        except Exception as e:
+        exceptimea as e:
             st.error(f"Authentication failed: {e}")
 else:
     session = st.session_state.snowpark_session
@@ -287,39 +284,60 @@ else:
         all_cols = list(df.columns)
         col1, col2, col3 = st.columns(3)
 
-        # X-axis selection
-        default_x = st.session_state.chart_x_axis.get(prefix, all_cols[0])
-        x_col = col1.selectbox("X axis", all_cols, index=all_cols.index(default_x) if default_x in all_cols else 0, key=f"{prefix}_x")
-        st.session_state.chart_x_axis[prefix] = x_col
+        # X-axis dropdown
+        x_key = f"{prefix}_x_{hash(query)}"  # Unique key for X-axis
+        default_x = st.session_state.get(x_key, all_cols[0])
+        try:
+            x_index = all_cols.index(default_x)
+        except ValueError:
+            x_index = 0
+        x_col = col1.selectbox("X axis", all_cols, index=x_index, key=x_key)
+        if x_col != st.session_state.get(x_key):
+            st.session_state[x_key] = x_col
+            st.rerun()  # Force rerun to update chart immediately
 
-        # Y-axis selection
+        # Y-axis dropdown
         remaining_cols = [c for c in all_cols if c != x_col]
-        default_y = st.session_state.chart_y_axis.get(prefix, remaining_cols[0] if remaining_cols else all_cols[0])
-        y_col = col2.selectbox("Y axis", remaining_cols, index=remaining_cols.index(default_y) if default_y in remaining_cols else 0, key=f"{prefix}_y")
-        st.session_state.chart_y_axis[prefix] = y_col
+        y_key = f"{prefix}_y_{hash(query)}"  # Unique key for Y-axis
+        default_y = st.session_state.get(y_key, remaining_cols[0] if remaining_cols else all_cols[0])
+        try:
+            y_index = remaining_cols.index(default_y) if remaining_cols else 0
+        except ValueError:
+            y_index = 0
+        y_col = col2.selectbox("Y axis", remaining_cols, index=y_index, key=y_key)
+        if y_col != st.session_state.get(y_key):
+            st.session_state[y_key] = y_col
+            st.rerun()  # Force rerun to update chart immediately
 
-        # Chart type selection
+        # Chart type dropdown
         chart_options = ["Line Chart", "Bar Chart", "Pie Chart", "Scatter Chart", "Histogram Chart"]
-        default_type = st.session_state.chart_type.get(prefix, default_chart)
-        chart_type = col3.selectbox("Chart Type", chart_options, index=chart_options.index(default_type) if default_type in chart_options else chart_options.index(default_chart), key=f"{prefix}_type")
-        st.session_state.chart_type[prefix] = chart_type
+        type_key = f"{prefix}_type_{hash(query)}"  # Unique key for chart type
+        default_type = st.session_state.get(type_key, default_chart)
+        try:
+            type_index = chart_options.index(default_type)
+        except ValueError:
+            type_index = chart_options.index(default_chart)
+        chart_type = col3.selectbox("Chart Type", chart_options, index=type_index, key=type_key)
+        if chart_type != st.session_state.get(type_key):
+            st.session_state[type_key] = chart_type
+            st.rerun()  # Force rerun to update chart immediately
 
         # Render chart based on selections
         if chart_type == "Line Chart":
             fig = px.line(df, x=x_col, y=y_col, title=chart_type)
-            st.plotly_chart(fig, use_container_width=True, key=f"{prefix}_line")
+            st.plotly_chart(fig, key=f"{prefix}_line_{hash(query)}")
         elif chart_type == "Bar Chart":
             fig = px.bar(df, x=x_col, y=y_col, title=chart_type)
-            st.plotly_chart(fig, use_container_width=True, key=f"{prefix}_bar")
+            st.plotly_chart(fig, key=f"{prefix}_bar_{hash(query)}")
         elif chart_type == "Pie Chart":
             fig = px.pie(df, names=x_col, values=y_col, title=chart_type)
-            st.plotly_chart(fig, use_container_width=True, key=f"{prefix}_pie")
+            st.plotly_chart(fig, key=f"{prefix}_pie_{hash(query)}")
         elif chart_type == "Scatter Chart":
             fig = px.scatter(df, x=x_col, y=y_col, title=chart_type)
-            st.plotly_chart(fig, use_container_width=True, key=f"{prefix}_scatter")
+            st.plotly_chart(fig, key=f"{prefix}_scatter_{hash(query)}")
         elif chart_type == "Histogram Chart":
             fig = px.histogram(df, x=x_col, title=chart_type)
-            st.plotly_chart(fig, use_container_width=True, key=f"{prefix}_hist")
+            st.plotly_chart(fig, key=f"{prefix}_hist_{hash(query)}")
 
     # UI Logic
     with st.sidebar:
@@ -409,13 +427,9 @@ else:
 
     if query:
         # Reset chart selections for new query
-        chart_prefix = f"chart_{hash(query)}"
-        if chart_prefix not in st.session_state.chart_x_axis:
-            st.session_state.chart_x_axis[chart_prefix] = None
-        if chart_prefix not in st.session_state.chart_y_axis:
-            st.session_state.chart_y_axis[chart_prefix] = None
-        if chart_prefix not in st.session_state.chart_type:
-            st.session_state.chart_type[chart_prefix] = "Bar Chart"
+        st.session_state.chart_x_axis = None
+        st.session_state.chart_y_axis = None
+        st.session_state.chart_type = "Bar Chart"  # Will be overridden in display_chart_tab based on query
 
         # Add user query to chat history
         st.session_state.chat_history.append({"role": "user", "content": query})
