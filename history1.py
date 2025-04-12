@@ -116,7 +116,7 @@ if not st.session_state.authenticated:
             st.success("Authentication successful! Redirecting...")
             st.rerun()
 
-        exceptimea as e:
+        except as e:
             st.error(f"Authentication failed: {e}")
 else:
     session = st.session_state.snowpark_session
