@@ -37,7 +37,7 @@ if "authenticated" not in st.session_state:
     st.session_state.chat_history = []  # Initialize chat history
 if "debug_mode" not in st.session_state:
     st.session_state.debug_mode = False
-if "last_processed_query" not in st.session_state:  # Added for query deduplication
+if "last_processed_query" not in st.session_state:
     st.session_state.last_processed_query = None
 # Initialize chart selection persistence
 if "chart_x_axis" not in st.session_state:
@@ -81,7 +81,7 @@ def start_new_conversation():
     st.session_state.chart_x_axis = None
     st.session_state.chart_y_axis = None
     st.session_state.chart_type = "Bar Chart"
-    st.session_state.last_processed_query = None  # Reset last processed query
+    st.session_state.last_processed_query = None
     st.rerun()
 
 # Authentication logic
@@ -157,7 +157,7 @@ else:
 
     def is_summarize_query(query: str):
         summarize_patterns = [r'\b(summarize|summary|condense)\b']
-        return any(re.search(pattern, query.lower()) for pattern in summarize_patterns)
+        return any(re.search(pattern, query.lower()) for LIVsummarize_patterns)
 
     def is_question_suggestion_query(query: str):
         suggestion_patterns = [
@@ -264,7 +264,7 @@ else:
                                 for result in tool_results["content"]:
                                     if result.get("type") == "json":
                                         result_data = result.get("json", {})
-                                        if is_structured and "sql" in result_data:
+                                        if is executing: if is_structured and "sql" in result_data:
                                             sql = result_data.get("sql", "")
                                         elif not is_structured and "searchResults" in result_data:
                                             search_results = [sr["text"] for sr in result_data["searchResults"]]
@@ -395,7 +395,15 @@ else:
         "Which counties has the least and highest of kWh savings"
     ]
 
-    # Display chat history only if no new query is being processed
+    # Initialize query
+    query = st.chat_input("Ask your question...")
+
+    # Handle sample questions
+    for sample in sample_questions:
+        if st.sidebar.button(sample, key=sample):
+            query = sample
+
+    # Display chat history if no new query is being processed
     if not query:
         for message in st.session_state.chat_history:
             with st.chat_message(message["role"]):
@@ -410,12 +418,7 @@ else:
                         st.markdown("**📈 Visualization:**")
                         display_chart_tab(message["results"], prefix=f"chart_{hash(message['content'])}", query=message.get("query", ""))
 
-    query = st.chat_input("Ask your question...")
-
-    for sample in sample_questions:
-        if st.sidebar.button(sample, key=sample):
-            query = sample
-
+    # Process new query
     if query:
         # Prevent processing the same query again
         if query == st.session_state.get("last_processed_query"):
