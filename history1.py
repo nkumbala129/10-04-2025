@@ -37,8 +37,6 @@ if "authenticated" not in st.session_state:
     st.session_state.chat_history = []  # Initialize chat history
 if "debug_mode" not in st.session_state:
     st.session_state.debug_mode = False
-if "last_processed_query" not in st.session_state:
-    st.session_state.last_processed_query = None
 # Initialize chart selection persistence
 if "chart_x_axis" not in st.session_state:
     st.session_state.chart_x_axis = None
@@ -60,13 +58,10 @@ if "current_summary" not in st.session_state:
 st.markdown("""
 <style>
 #MainMenu, header, footer {visibility: hidden;}
-/* Prevent shading of previous chat messages during reruns or processing */
-[data-testid="stChatMessage"],
-[data-testid="stChatMessage"] * {
+/* Prevent shading of previous chat messages */
+[data-testid="stChatMessage"] {
     opacity: 1 !important;
     background-color: transparent !important;
-    filter: none !important;
-    transition: none !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -81,7 +76,6 @@ def start_new_conversation():
     st.session_state.chart_x_axis = None
     st.session_state.chart_y_axis = None
     st.session_state.chart_type = "Bar Chart"
-    st.session_state.last_processed_query = None
     st.rerun()
 
 # Authentication logic
@@ -157,7 +151,7 @@ else:
 
     def is_summarize_query(query: str):
         summarize_patterns = [r'\b(summarize|summary|condense)\b']
-        return any(re.search(pattern, query.lower()) for LIVsummarize_patterns)
+        return any(re.search(pattern, query.lower()) for pattern in summarize_patterns)
 
     def is_question_suggestion_query(query: str):
         suggestion_patterns = [
@@ -264,7 +258,7 @@ else:
                                 for result in tool_results["content"]:
                                     if result.get("type") == "json":
                                         result_data = result.get("json", {})
-                                        if is executing: if is_structured and "sql" in result_data:
+                                        if is_structured and "sql" in result_data:
                                             sql = result_data.get("sql", "")
                                         elif not is_structured and "searchResults" in result_data:
                                             search_results = [sr["text"] for sr in result_data["searchResults"]]
@@ -395,36 +389,27 @@ else:
         "Which counties has the least and highest of kWh savings"
     ]
 
-    # Initialize query
+    # Display chat history
+    for message in st.session_state.chat_history:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+            if message["role"] == "assistant" and "results" in message and message["results"] is not None:
+                with st.expander("View SQL Query", expanded=False):
+                    st.code(message["sql"], language="sql")
+                st.markdown(f"**Query Results ({len(message['results'])} rows):**")
+                st.dataframe(message["results"])
+                # Only show visualization if it can be rendered
+                if not message["results"].empty and len(message["results"].columns) >= 2:
+                    st.markdown("**📈 Visualization:**")
+                    display_chart_tab(message["results"], prefix=f"chart_{hash(message['content'])}", query=message.get("query", ""))
+
     query = st.chat_input("Ask your question...")
 
-    # Handle sample questions
     for sample in sample_questions:
         if st.sidebar.button(sample, key=sample):
             query = sample
 
-    # Display chat history if no new query is being processed
-    if not query:
-        for message in st.session_state.chat_history:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
-                if message["role"] == "assistant" and "results" in message and message["results"] is not None:
-                    with st.expander("View SQL Query", expanded=False):
-                        st.code(message["sql"], language="sql")
-                    st.markdown(f"**Query Results ({len(message['results'])} rows):**")
-                    st.dataframe(message["results"])
-                    # Only show visualization if it can be rendered
-                    if not message["results"].empty and len(message["results"].columns) >= 2:
-                        st.markdown("**📈 Visualization:**")
-                        display_chart_tab(message["results"], prefix=f"chart_{hash(message['content'])}", query=message.get("query", ""))
-
-    # Process new query
     if query:
-        # Prevent processing the same query again
-        if query == st.session_state.get("last_processed_query"):
-            st.stop()
-        st.session_state.last_processed_query = query
-
         # Reset chart selections for new query
         st.session_state.chart_x_axis = None
         st.session_state.chart_y_axis = None
